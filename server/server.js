@@ -17,11 +17,44 @@ const app = express();
 const server = http.createServer(app);
 
 // CORS origins — support comma-separated CLIENT_URL for multiple origins
-const allowedOrigins = CLIENT_URL
+const envOrigins = CLIENT_URL
   ? CLIENT_URL.split(',').map((s) => s.trim()).filter(Boolean)
-  : ['http://localhost:5173', 'http://localhost:3000'];
+  : [];
+
+const allowedOrigins = [
+  ...new Set([
+    ...envOrigins,
+    'https://hackfest26.netlify.app',
+    'http://localhost:5173',
+    'http://localhost:3000',
+  ]),
+];
 
 console.log('Allowed CORS origins:', allowedOrigins);
+
+// Handle preflight OPTIONS requests explicitly
+app.options('*', cors({
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
+// CORS — must be BEFORE helmet
+app.use(
+  cors({
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
+
+// Security headers — disable policies that block cross-origin requests
+app.use(helmet({
+  crossOriginResourcePolicy: false,
+  crossOriginOpenerPolicy: false,
+}));
 
 // Socket.io setup
 const io = new Server(server, {
@@ -34,19 +67,6 @@ const io = new Server(server, {
 
 // Make io accessible in controllers via req.app.get('io')
 app.set('io', io);
-
-// CORS — must be BEFORE helmet so preflight OPTIONS requests get handled
-app.use(
-  cors({
-    origin: allowedOrigins,
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  })
-);
-
-// Security headers
-app.use(helmet());
 
 // Request logging
 if (NODE_ENV === 'development') {

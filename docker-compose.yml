@@ -1,0 +1,61 @@
+version: "3.9"
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: hackathon-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - hackathon-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  server:
+    build:
+      context: ./server
+      dockerfile: ../Dockerfile.server
+    container_name: hackathon-server
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/hackathon-portal
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - hackathon-network
+
+  client:
+    build:
+      context: ./client
+      dockerfile: ../Dockerfile.client
+      args:
+        VITE_API_URL: http://localhost:5000/api/v1
+        VITE_SOCKET_URL: http://localhost:5000
+    container_name: hackathon-client
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - server
+    networks:
+      - hackathon-network
+
+volumes:
+  mongo-data:
+    driver: local
+
+networks:
+  hackathon-network:
+    driver: bridge
